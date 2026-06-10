@@ -640,4 +640,93 @@ with sync_playwright() as p:
 
     print("Clicked Continue and Save")
 
+
     applicant_page.pause()
+
+    # --------------------------------
+    # EXPORT QUOTE PDF
+    # --------------------------------
+
+    import os
+    import re
+
+    print("Opening Documents...")
+
+    # open documents modal
+    applicant_page.get_by_role(
+        "button",
+        name="Documents"
+    ).nth(1).click()
+
+    applicant_page.wait_for_timeout(
+        3000
+    )
+
+    print("Accessing iframe...")
+
+    frame = applicant_page.locator(
+        'iframe[name*="dctPopup"]'
+    ).content_frame
+
+    applicant_page.wait_for_timeout(
+        2000
+    )
+
+    print(
+        "Selecting Insurance Estimate..."
+    )
+
+    # check insurance estimate
+    checkbox = frame.get_by_role(
+        "checkbox"
+    )
+
+    checkbox.check()
+
+    applicant_page.wait_for_timeout(
+        2000
+    )
+
+    # create folder
+    os.makedirs(
+        "quotes",
+        exist_ok=True
+    )
+
+    safe_name = re.sub(
+        r'[^a-zA-Z0-9]',
+        '_',
+        f"{first_name}_{last_name}"
+    )
+
+    safe_address = re.sub(
+        r'[^a-zA-Z0-9]',
+        '_',
+        street_address
+    )
+
+    pdf_path = (
+        f"quotes/"
+        f"{safe_name}_"
+        f"{safe_address}.pdf"
+    )
+
+    print("Downloading PDF...")
+
+    with applicant_page.expect_download() as download_info:
+
+        frame.get_by_role(
+            "button",
+            name="Print Selected"
+        ).click()
+
+    download = download_info.value
+
+    download.save_as(
+        pdf_path
+    )
+
+    print(
+        f"Saved PDF: "
+        f"{pdf_path}"
+    )
