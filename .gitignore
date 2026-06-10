@@ -1,0 +1,5 @@
+customers.xlsx
+customers_enriched.xlsx
+*.pyc
+__pycache__/
+.env
