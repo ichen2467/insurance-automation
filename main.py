@@ -9,7 +9,27 @@ from playwright.sync_api import sync_playwright
 def select_dropdown(page, selector, option_text):
     dropdown = page.locator(selector)
 
-    dropdown.click()
+    # try clicking dropdown
+    for attempt in range(3):
+
+        try:
+
+            dropdown.click(
+                timeout=3000
+            )
+
+            break
+
+        except:
+
+            print(
+                f"Retrying dropdown "
+                f"({attempt + 1}/3)"
+            )
+
+            page.wait_for_timeout(
+                1000
+            )
 
     page.wait_for_timeout(500)
 
@@ -92,6 +112,60 @@ with sync_playwright() as p:
 
     browser = p.chromium.connect_over_cdp(
         "http://localhost:9222"
+    )
+
+    print(
+        "Opening Foremost..."
+    )
+
+    context = browser.contexts[0]
+
+    page = context.new_page()
+
+    page.goto(
+        "https://www.foremostagent.com/ia/portal/login",
+        timeout=60000
+    )
+
+    page.wait_for_timeout(
+        2000
+    )
+
+    # --------------------------------
+    # HANDLE OPTIONAL CONTINUE BUTTONS
+    # --------------------------------
+
+    for _ in range(2):
+
+        try:
+
+            continue_button = page.get_by_role(
+                "button",
+                name="Continue"
+            )
+
+            if continue_button.is_visible():
+
+                print(
+                    "Clicking Continue..."
+                )
+
+                continue_button.click()
+
+                page.wait_for_timeout(
+                    2000
+                )
+
+        except:
+
+            print(
+                "No Continue button"
+            )
+
+            break
+
+    print(
+        "Foremost opened"
     )
 
     print("Connected!")
@@ -255,14 +329,25 @@ with sync_playwright() as p:
 
     print("Secondary applicant = No")
 
-    # Auto policy
-    select_dropdown(
-        applicant_page,
-        'input[name*="20EE_5_1-inputEl"]',
-        "No"
-    )
+    # Auto policy (MD only)
 
-    print("Auto policy = No")
+    if state == "MD":
+
+        select_dropdown(
+            applicant_page,
+            'input[name*="20EE_5_1-inputEl"]',
+            "No"
+        )
+
+        print(
+            "Auto policy = No"
+        )
+
+    else:
+
+        print(
+            "Auto policy question skipped"
+        )
 
     # Currently insured
     select_dropdown(
@@ -300,6 +385,7 @@ with sync_playwright() as p:
     print("Cancelled history = No")
 
     # Qualifying policy
+    
     select_dropdown(
         applicant_page,
         'input[name*="216E_5_1-inputEl"]',
@@ -308,14 +394,19 @@ with sync_playwright() as p:
 
     print("Qualifying policy = No")
 
-    # Farmers employee
-    select_dropdown(
-        applicant_page,
-        'input[name*="2177_5_1-inputEl"]',
-        "No"
-    )
 
-    print("Farmers employee = No")
+    # Farmers employee (MD only)
+    
+    if state == "MD":
+        select_dropdown(
+            applicant_page,
+            'input[name*="2177_5_1-inputEl"]',
+            "No"
+        )
+
+        print("Farmers employee = No")
+    else:
+        print("Skipped Farmers employee question")
 
     applicant_page.get_by_role(
         "button",
@@ -331,6 +422,7 @@ with sync_playwright() as p:
     applicant_page.wait_for_timeout(3000)
 
     print("Eligibility page loaded")
+
 
     # Existing damage (special case)
     damage_dropdown = applicant_page.locator(
@@ -381,6 +473,17 @@ with sync_playwright() as p:
 
     print("Vacant = No")
 
+    if state == "VA":
+        select_dropdown(
+            applicant_page,
+            'input[name*="7F_5_1-inputEl"]',
+            "No"
+        )
+
+        print("Dogs = No")
+    else:
+        print("Dogs question skipped")
+
     select_dropdown(
         applicant_page,
         'input[name*="DA_5_1-inputEl"]',
@@ -408,17 +511,27 @@ with sync_playwright() as p:
     # LOSSES PAGE
     # --------------------------------
 
-    applicant_page.wait_for_timeout(3000)
+    # wait until eligibility page is gone
+    applicant_page.wait_for_timeout(
+        5000
+    )
+
+    # get only visible Select dropdown
+    losses_dropdown = applicant_page.locator(
+        'input[placeholder="Select"]:visible'
+    )
+
+    losses_dropdown.wait_for(
+        timeout=30000
+    )
 
     print("Losses page loaded")
 
-    losses_dropdown = applicant_page.get_by_placeholder(
-        "Select"
-    )
-
     losses_dropdown.click()
 
-    applicant_page.wait_for_timeout(500)
+    applicant_page.wait_for_timeout(
+        500
+    )
 
     applicant_page.get_by_role(
         "option",
@@ -524,6 +637,21 @@ with sync_playwright() as p:
     print("Townhouse = No")
 
     # --------------------------------
+    # Electrical, plumbing, heating updated
+    # --------------------------------
+
+    if state == "VA":
+        select_dropdown(
+            applicant_page,
+            'input[name*="3E_5_1-inputEl"]',
+            "No"
+        )
+
+        print("Electrial, plumbing, heating updated = No")
+    else:
+        print("Electrical, plumbing, heating question skipped")
+
+    # --------------------------------
     # Roof updated
     # --------------------------------
 
@@ -538,6 +666,9 @@ with sync_playwright() as p:
     # --------------------------------
     # Amount of insurance
     # --------------------------------
+
+    if int(assessment) > 1000000:
+        assessment = "1000000"
 
     applicant_page.locator(
         'input[name="int_490"]'
@@ -640,8 +771,46 @@ with sync_playwright() as p:
 
     print("Clicked Continue and Save")
 
+    # --------------------------------
+    # HANDLE UNDERWRITING POPUP
+    # --------------------------------
 
-    applicant_page.pause()
+    applicant_page.wait_for_timeout(
+        2000
+    )
+
+    try:
+
+        popup_frame = applicant_page.locator(
+            'iframe[name*="dctPopup"]'
+        ).content_frame
+
+        close_button = popup_frame.get_by_role(
+            "button",
+            name="Close Window"
+        )
+
+        if close_button.is_visible():
+
+            print(
+                "Underwriting popup detected"
+            )
+
+            close_button.click()
+
+            applicant_page.wait_for_timeout(
+                1000
+            )
+
+            print(
+                "Closed popup"
+            )
+
+    except:
+
+        print(
+            "No underwriting popup"
+        )
 
     # --------------------------------
     # EXPORT QUOTE PDF

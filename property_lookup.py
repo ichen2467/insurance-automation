@@ -98,56 +98,86 @@ def extract_tax_assessment(page):
             "body"
         ).inner_text()
 
-        # isolate Public tax history section
-        tax_section_match = re.search(
-            r'Public tax history(.*?)(Climate risks|Nearby schools|Neighborhood)',
+        section_match = re.search(
+            r'Public tax history(.*?)Show more',
             body_text,
-            re.DOTALL | re.IGNORECASE
-        )
-
-        if not tax_section_match:
-            return ""
-
-        tax_section = (
-            tax_section_match.group(1)
-        )
-
-        # find year + assessment rows
-        matches = re.findall(
-            r'(20\d{2}).*?\$([\d,]+)',
-            tax_section,
             re.DOTALL
         )
 
-        assessments = []
+        if not section_match:
+            return ""
 
-        for year, amount in matches:
+        section_text = (
+            section_match.group(1)
+        )
 
-            clean_amount = int(
-                amount.replace(",", "")
-            )
+        lines = section_text.splitlines()
 
-            if clean_amount > 50000:
-                assessments.append(
-                    (
-                        int(year),
-                        clean_amount
-                    )
+        newest_year = -1
+        newest_assessment = ""
+
+        for line in lines:
+
+            line = line.strip()
+
+            if re.match(
+                r'^20\d{2}',
+                line
+            ):
+
+                year_match = re.match(
+                    r'^(20\d{2})',
+                    line
                 )
 
-        if assessments:
+                if not year_match:
+                    continue
 
-            newest = max(
-                assessments,
-                key=lambda x: x[0]
-            )
+                year = int(
+                    year_match.group(1)
+                )
 
-            return str(
-                newest[1]
-            )
+                money_values = re.findall(
+                    r'\$([\d,]+)',
+                    line
+                )
 
-    except:
-        pass
+                if not money_values:
+                    continue
+
+                # Maryland:
+                # 2025 -- $846,033
+                if len(money_values) == 1:
+
+                    assessment = int(
+                        money_values[0]
+                        .replace(",", "")
+                    )
+
+                # Virginia:
+                # 2025 $15,928 $1,377,880
+                else:
+
+                    assessment = int(
+                        money_values[-1]
+                        .replace(",", "")
+                    )
+
+                if year > newest_year:
+
+                    newest_year = year
+                    newest_assessment = str(
+                        assessment
+                    )
+
+        return newest_assessment
+
+    except Exception as e:
+
+        print(
+            "Assessment error:",
+            str(e)
+        )
 
     return ""
 
@@ -158,7 +188,8 @@ def extract_tax_assessment(page):
 df = pd.read_excel("customers.xlsx")
 df = df.dropna(how="all")
 
-new_columns = [
+# force columns to string type
+text_columns = [
     "YearBuilt",
     "SquareFeet",
     "PurchaseDate",
@@ -166,9 +197,15 @@ new_columns = [
     "LookupStatus"
 ]
 
-for col in new_columns:
+for col in text_columns:
+
     if col not in df.columns:
         df[col] = ""
+
+    df[col] = (
+        df[col]
+        .astype(str)
+    )
 
 
 # --------------------------------
@@ -248,7 +285,7 @@ with sync_playwright() as p:
                 timeout=60000
             )
 
-            page.wait_for_timeout(5000)
+            page.wait_for_timeout(2000)
 
             year_built = extract_year_built(page)
 
@@ -291,16 +328,6 @@ with sync_playwright() as p:
 
             assessment = (
                 extract_tax_assessment(page)
-            )
-
-            print(
-                "Purchase Date:",
-                purchase_date
-            )
-
-            print(
-                "Assessment:",
-                assessment
             )
 
             df.at[
