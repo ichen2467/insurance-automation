@@ -291,9 +291,6 @@ with sync_playwright() as p:
 
             square_feet = extract_square_feet(page)
 
-            print("Year Built:", year_built)
-            print("Square Feet:", square_feet)
-
             # --------------------------------
             # SCROLL TO LOAD PRICE/TAX HISTORY
             # --------------------------------

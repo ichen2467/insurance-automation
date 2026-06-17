@@ -6,7 +6,7 @@ start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" ^
 --remote-debugging-port=9222 ^
 --user-data-dir=C:\ChromeAutomation
 
-timeout /t 5 >nul
+timeout /t 2 >nul
 
 echo Running property lookup...
 python property_lookup.py
@@ -22,6 +22,6 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr :9222') do (
 
 echo Finished!
 
-timeout /t 3 >nul
+timeout /t 2 >nul
 
-exit
+pause
