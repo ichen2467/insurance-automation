@@ -467,16 +467,20 @@ def process_customer(context, row):
 
         replacement_cost = "Yes" if int(capped_assessment) > 750_000 else "No"
 
-        replacement_dropdown = applicant_page.locator('input[name*="BC_5_1-inputEl"]')
+        replacement_dropdown = applicant_page.locator(
+            'input[name*="BC_5_1-inputEl"]'
+        )
+
         replacement_dropdown.scroll_into_view_if_needed()
         replacement_dropdown.click()
-        applicant_page.wait_for_timeout(1000)
-        replacement_dropdown.click()
-        applicant_page.wait_for_timeout(500)
 
-        applicant_page.locator(
-            '.x-boundlist:not([style*="display: none"]) [role="option"]'
-        ).filter(has_text=replacement_cost).first.click()
+        applicant_page.wait_for_timeout(1000)
+
+        applicant_page.get_by_text(
+            replacement_cost,
+            exact=True
+        ).click(timeout=10000)
+
         log.info(f"Replacement cost = {replacement_cost}")
 
         # --------------------------------
