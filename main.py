@@ -248,9 +248,6 @@ def process_customer(context, row):
     purchase_date = str(row["PurchaseDate"]).strip()
     assessment = str(round(float(row["TotalAssessment"])))
 
-    # DOB is a required column (see REQUIRED_FIELDS / validate_row) —
-    # rows missing it are skipped before process_customer is ever
-    # called, so by this point row["DOB"] is guaranteed present.
     dob = str(row["DOB"]).strip()
 
     opened_pages = []
