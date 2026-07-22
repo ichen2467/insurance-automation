@@ -152,19 +152,28 @@ def click_with_retry(locator, attempts=3, timeout=3000, wait_between=1000, force
 
 
 def select_dropdown(page, selector, option_text):
+    """
+    Opens a combobox and types the option text using real keystroke
+    events (press_sequentially), then confirms with Enter.
+
+    Using press_sequentially for every field — rather than .fill() for
+    free-text values and .press("Y"/"N") for yes/no — matters because
+    these widgets filter their option list off keydown/keyup listeners.
+    .fill() sets the value via JS and only fires a single 'input'
+    event, which some of these comboboxes don't react to; it happened
+    to work here because the widget tolerates it, not because it's
+    equivalent. Typing character-by-character is what the widget
+    actually expects, for every field.
+    """
     dropdown = page.locator(selector)
     click_with_retry(dropdown, label=selector)
 
-    page.wait_for_timeout(500)
+    dropdown.wait_for(state="visible", timeout=5000)
+    page.wait_for_timeout(200)  # let the listbox finish opening/animating
 
-    if option_text.lower() == "yes":
-        dropdown.press("Y")
-    elif option_text.lower() == "no":
-        dropdown.press("N")
-    else:
-        dropdown.fill(option_text)
+    dropdown.press_sequentially(option_text, delay=50)
 
-    page.wait_for_timeout(300)
+    page.wait_for_timeout(300)  # let the filtered option list settle
     dropdown.press("Enter")
     page.wait_for_timeout(300)
 
@@ -176,14 +185,13 @@ def select_dropdown(page, selector, option_text):
 REQUIRED_FIELDS = [
     "FirstName", "LastName", "Address", "City", "State",
     "ZIP", "YearBuilt", "SquareFeet", "PurchaseDate", "TotalAssessment",
+    "DOB",
 ]
 
 STATE_MAP = {
     "MD": "Maryland",
     "VA": "Virginia",
 }
-
-DEFAULT_DOB = "01/01/1985"
 
 
 def validate_row(row):
@@ -201,7 +209,7 @@ def validate_row(row):
 
     for field in ("ZIP", "YearBuilt", "SquareFeet", "TotalAssessment"):
         try:
-            int(row[field])
+            int(float(row[field]))
         except (ValueError, TypeError):
             problems.append(f"'{field}' is not a valid number: {row[field]!r}")
 
@@ -230,24 +238,20 @@ def process_customer(context, row):
     street_address = str(row["Address"]).strip()
     city = str(row["City"]).strip().upper()
     state = str(row["State"]).strip().upper()
-    zip_code = str(int(row["ZIP"]))
+    zip_code = str(int(float(row["ZIP"]))).zfill(5)
 
     formatted_address = f"{street_address.upper()}, {city}, {state} {zip_code}"
     state_name = STATE_MAP.get(state, state)
 
-    year_built = str(int(row["YearBuilt"]))
-    square_feet = str(int(row["SquareFeet"]))
+    year_built = str(int(float(row["YearBuilt"])))
+    square_feet = str(int(float(row["SquareFeet"])))
     purchase_date = str(row["PurchaseDate"]).strip()
-    assessment = str(int(row["TotalAssessment"]))
+    assessment = str(round(float(row["TotalAssessment"])))
 
-    # Prefer a DOB column if present in the sheet; otherwise fall back
-    # to the shared default and say so explicitly (this used to be
-    # silently applied to every customer regardless of their real DOB).
-    if "DOB" in row and not pd.isna(row["DOB"]) and str(row["DOB"]).strip():
-        dob = str(row["DOB"]).strip()
-    else:
-        dob = DEFAULT_DOB
-        log.warning(f"No DOB column/value for {first_name} {last_name} — using default {DEFAULT_DOB}")
+    # DOB is a required column (see REQUIRED_FIELDS / validate_row) —
+    # rows missing it are skipped before process_customer is ever
+    # called, so by this point row["DOB"] is guaranteed present.
+    dob = str(row["DOB"]).strip()
 
     opened_pages = []
 
@@ -360,7 +364,7 @@ def process_customer(context, row):
 
         damage_dropdown = applicant_page.locator('input[name*="64_5_1-inputEl"]')
         damage_dropdown.scroll_into_view_if_needed()
-        applicant_page.wait_for_timeout(1000)
+        damage_dropdown.wait_for(state="visible", timeout=5000)
         click_with_retry(damage_dropdown, force=True, label="existing damage dropdown")
         applicant_page.wait_for_timeout(500)
         applicant_page.get_by_role("option", name="No").first.click()
@@ -398,7 +402,7 @@ def process_customer(context, row):
         # --------------------------------
         applicant_page.wait_for_timeout(5000)
 
-        losses_dropdown = applicant_page.locator('input[placeholder="Select"]:visible')
+        losses_dropdown = applicant_page.locator('input[placeholder="Select"]:visible').first
         losses_dropdown.wait_for(timeout=30000)
         log.info("Losses page loaded")
 
@@ -472,6 +476,7 @@ def process_customer(context, row):
         )
 
         replacement_dropdown.scroll_into_view_if_needed()
+        replacement_dropdown.wait_for(state="visible", timeout=5000)
         replacement_dropdown.click()
 
         applicant_page.wait_for_timeout(1000)
@@ -573,106 +578,108 @@ skipped = []
 
 chrome_process = launch_debug_chrome()
 
-with sync_playwright() as p:
-    log.info("Connecting to browser...")
-    browser = p.chromium.connect_over_cdp(CDP_URL)
+try:
+    with sync_playwright() as p:
+        log.info("Connecting to browser...")
+        browser = p.chromium.connect_over_cdp(CDP_URL)
 
-    log.info("Opening Foremost...")
-    context = browser.contexts[0]
-    page = context.new_page()
-    page.goto("https://www.foremostagent.com/ia/portal/login", timeout=60000)
-    page.wait_for_timeout(2000)
+        log.info("Opening Foremost...")
+        context = browser.contexts[0]
+        page = context.new_page()
+        page.goto("https://www.foremostagent.com/ia/portal/login", timeout=60000)
+        page.wait_for_timeout(2000)
 
-    for _ in range(2):
-        try:
-            continue_button = page.get_by_role("button", name="Continue")
-            if continue_button.is_visible():
-                log.info("Clicking Continue...")
-                continue_button.click()
-                page.wait_for_timeout(2000)
-        except Exception as e:
-            log.debug(f"No Continue button: {e}")
-            break
-
-    log.info("Foremost opened. Connected!")
-
-    context = browser.contexts[0]
-    page = None
-    for tab in context.pages:
-        try:
-            if "foremost" in (tab.url or "").lower():
-                page = tab
+        for _ in range(2):
+            try:
+                continue_button = page.get_by_role("button", name="Continue")
+                if continue_button.is_visible():
+                    log.info("Clicking Continue...")
+                    continue_button.click()
+                    page.wait_for_timeout(2000)
+            except Exception as e:
+                log.debug(f"No Continue button: {e}")
                 break
-        except Exception:
-            pass
 
-    if page is None:
-        log.error("Foremost tab not found — aborting")
-        raise SystemExit(1)
+        log.info("Foremost opened. Connected!")
 
-    # --------------------------------
-    # PER-CUSTOMER LOOP
-    # --------------------------------
-    for index, row in df.iterrows():
-        customer_label = f"{row.get('FirstName', '?')} {row.get('LastName', '?')} (row {index})"
-        log.info(f"--- Starting customer {index + 1} of {len(df)}: {customer_label} ---")
+        context = browser.contexts[0]
+        page = None
+        for tab in context.pages:
+            try:
+                if "foremost" in (tab.url or "").lower():
+                    page = tab
+                    break
+            except Exception:
+                pass
 
-        problems = validate_row(row)
-        # Only *missing field* problems are fatal; an unmapped state is
-        # a warning (see validate_row) but we still attempt the row.
-        fatal_problems = [p for p in problems if "has no entry in STATE_MAP" not in p]
-        if fatal_problems:
-            log.error(f"Skipping {customer_label} — {'; '.join(fatal_problems)}")
-            skipped.append((customer_label, "; ".join(fatal_problems)))
-            continue
-        for p_msg in problems:
-            if "has no entry in STATE_MAP" in p_msg:
-                log.warning(f"{customer_label}: {p_msg}")
+        if page is None:
+            log.error("Foremost tab not found — aborting")
+            raise RuntimeError("Foremost tab not found")
 
+        # --------------------------------
+        # PER-CUSTOMER LOOP
+        # --------------------------------
+        for index, row in df.iterrows():
+            customer_label = f"{row.get('FirstName', '?')} {row.get('LastName', '?')} (row {index})"
+            log.info(f"--- Starting customer {index + 1} of {len(df)}: {customer_label} ---")
+
+            problems = validate_row(row)
+            # Only *missing field* problems are fatal; an unmapped state is
+            # a warning (see validate_row) but we still attempt the row.
+            fatal_problems = [p for p in problems if "has no entry in STATE_MAP" not in p]
+            if fatal_problems:
+                log.error(f"Skipping {customer_label} — {'; '.join(fatal_problems)}")
+                skipped.append((customer_label, "; ".join(fatal_problems)))
+                continue
+            for p_msg in problems:
+                if "has no entry in STATE_MAP" in p_msg:
+                    log.warning(f"{customer_label}: {p_msg}")
+
+            try:
+                pdf_path = process_customer(context, row)
+                successes.append((customer_label, pdf_path))
+            except Exception as e:
+                log.error(f"Failed on {customer_label}: {e}", exc_info=True)
+                failures.append((customer_label, str(e)))
+                continue
+
+        # --------------------------------
+        # RUN SUMMARY
+        # --------------------------------
+        log.info("=" * 60)
+        log.info(f"RUN COMPLETE: {len(successes)} succeeded, {len(failures)} failed, {len(skipped)} skipped")
+
+        if successes:
+            log.info("Succeeded:")
+            for name, path in successes:
+                log.info(f"  ✓ {name} -> {path}")
+
+        if skipped:
+            log.info("Skipped (bad data):")
+            for name, reason in skipped:
+                log.info(f"  - {name}: {reason}")
+
+        if failures:
+            log.info("Failed (needs manual follow-up):")
+            for name, reason in failures:
+                log.info(f"  ✗ {name}: {reason}")
+
+        log.info(f"Full log written to {log_filename}")
+
+        # --------------------------------
+        # CLOSE ALL BROWSER TABS/CONTEXTS
+        # --------------------------------
+        log.info("Closing all browser windows...")
         try:
-            pdf_path = process_customer(context, row)
-            successes.append((customer_label, pdf_path))
+            browser.close()
+            log.info("Playwright browser closed")
         except Exception as e:
-            log.error(f"Failed on {customer_label}: {e}", exc_info=True)
-            failures.append((customer_label, str(e)))
-            continue
+            log.warning(f"Error closing browser: {e}")
 
-    # --------------------------------
-    # RUN SUMMARY
-    # --------------------------------
-    log.info("=" * 60)
-    log.info(f"RUN COMPLETE: {len(successes)} succeeded, {len(failures)} failed, {len(skipped)} skipped")
-
-    if successes:
-        log.info("Succeeded:")
-        for name, path in successes:
-            log.info(f"  ✓ {name} -> {path}")
-
-    if skipped:
-        log.info("Skipped (bad data):")
-        for name, reason in skipped:
-            log.info(f"  - {name}: {reason}")
-
-    if failures:
-        log.info("Failed (needs manual follow-up):")
-        for name, reason in failures:
-            log.info(f"  ✗ {name}: {reason}")
-
-    log.info(f"Full log written to {log_filename}")
-
-    # --------------------------------
-    # CLOSE ALL WINDOWS
-    # --------------------------------
-    log.info("Closing all browser windows...")
-
-    try:
-        # Close all Playwright browser contexts/tabs
-        browser.close()
-        log.info("Playwright browser closed")
-    except Exception as e:
-        log.warning(f"Error closing browser: {e}")
-
-    # If this script launched Chrome, terminate it too
+finally:
+    # Runs no matter how the run ended (clean finish, aborted early,
+    # unhandled exception) so we never leave an orphaned Chrome process
+    # behind, and don't leave a debug port bound for the next run.
     if chrome_process:
         try:
             log.info("Terminating Chrome process...")
