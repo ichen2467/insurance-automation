@@ -1,4 +1,7 @@
 @echo off
-cd /d "C:\Users\ichen\OneDrive\Desktop\InsuranceAutomation"
+
+cd /d "%~dp0"
+
 python main.py
+
 pause
