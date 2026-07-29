@@ -523,23 +523,38 @@ def process_customer(context, row):
         applicant_page.get_by_role("button", name="Continue and Save").click()
         log.info("Clicked Continue and Save (eligibility)")
 
+        from playwright.sync_api import Error as PlaywrightError
+
         # --------------------------------
         # LOSSES PAGE
         # --------------------------------
         applicant_page.wait_for_timeout(5000)
 
-        losses_dropdown = applicant_page.locator('input[placeholder="Select"]:visible')
-        losses_dropdown.wait_for(timeout=30000)
-        log.info("Losses page loaded")
+        try:
+            losses_dropdown = applicant_page.locator('input[placeholder="Select"]:visible')
+            losses_dropdown.wait_for(timeout=30000)
+            log.info("Losses page loaded")
 
-        losses_dropdown.click()
-        applicant_page.wait_for_timeout(500)
-        applicant_page.get_by_role("option", name="No").first.click()
-        log.info("Loss history = No")
+            losses_dropdown.click()
+            applicant_page.wait_for_timeout(500)
+            applicant_page.get_by_role("option", name="No").first.click()
+            log.info("Loss history = No")
 
+            applicant_page.get_by_role("button", name="Continue and Save").click()
+            log.info("Clicked Continue and Save (losses)")
 
-        applicant_page.get_by_role("button", name="Continue and Save").click()
-        log.info("Clicked Continue and Save (losses)")
+        except PlaywrightError as e:
+            if "strict mode violation" in str(e):
+                log.warning(
+                    "Unexpected Losses page encountered. Exiting and saving quote."
+                )
+                click_with_retry(
+                    applicant_page.get_by_role("button", name="Exit and Save")
+                )
+                return None
+
+            # Re-raise any other Playwright errors
+            raise
 
 
         # --------------------------------
