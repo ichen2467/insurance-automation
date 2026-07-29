@@ -151,23 +151,92 @@ def click_with_retry(locator, attempts=3, timeout=3000, wait_between=1000, force
     raise last_error
 
 
-def select_dropdown(page, selector, option_text):
+def select_dropdown(page, selector, option_text, attempts=3):
+    """
+    Selects a value from an ExtJS autocomplete dropdown and verifies
+    that the selection actually changed before returning.
+    """
     dropdown = page.locator(selector)
-    click_with_retry(dropdown, label=selector)
 
-    page.wait_for_timeout(500)
+    dropdown.wait_for(state="attached", timeout=10000)
+    dropdown.scroll_into_view_if_needed()
 
-    if option_text.lower() == "yes":
-        dropdown.press("Y")
-    elif option_text.lower() == "no":
-        dropdown.press("N")
-    else:
-        dropdown.fill(option_text)
+    last_error = None
 
-    page.wait_for_timeout(300)
-    dropdown.press("Enter")
-    page.wait_for_timeout(300)
+    for attempt in range(1, attempts + 1):
+        try:
+            # Start fresh each attempt
+            click_with_retry(
+                dropdown,
+                attempts=1,
+                label=f"{selector} (attempt {attempt})"
+            )
 
+            page.wait_for_timeout(300)
+
+            # Clear any partial text from a previous failed attempt
+            dropdown.press("Control+A")
+            dropdown.press("Backspace")
+            page.wait_for_timeout(100)
+
+            if option_text.lower() == "yes":
+                dropdown.press("Y")
+            elif option_text.lower() == "no":
+                dropdown.press("N")
+            else:
+                dropdown.fill(option_text)
+
+            page.wait_for_timeout(300)
+            dropdown.press("Enter")
+            page.wait_for_timeout(500)
+
+            value = dropdown.input_value().strip()
+
+            # Success if placeholder disappeared and we have a value
+            if value and value.lower() != "select":
+                return
+
+            raise Exception(f"Dropdown still shows placeholder: {value!r}")
+
+        except Exception as e:
+            last_error = e
+            log.warning(
+                f"Retry {attempt}/{attempts} selecting '{option_text}' for {selector}: {e}"
+            )
+            page.wait_for_timeout(1000)
+
+    raise last_error
+
+def check_checkbox(page, selector, label, attempts=3):
+    checkbox = page.locator(selector)
+
+    checkbox.wait_for(state="attached", timeout=10000)
+    checkbox.scroll_into_view_if_needed()
+
+    last_error = None
+
+    for attempt in range(1, attempts + 1):
+        try:
+            if checkbox.is_checked():
+                log.info(f"{label} already checked")
+                return
+
+            checkbox.check(timeout=3000)
+
+            if checkbox.is_checked():
+                log.info(f"{label} checked")
+                return
+
+            raise Exception("Checkbox state did not change")
+
+        except Exception as e:
+            last_error = e
+            log.warning(
+                f"Retry {attempt}/{attempts} checking {label}: {e}"
+            )
+            page.wait_for_timeout(500)
+
+    raise last_error
 
 # --------------------------------
 # ROW VALIDATION
@@ -347,8 +416,36 @@ def process_customer(context, row):
         select_dropdown(applicant_page, 'input[name*="1F5C_5_1-inputEl"]', "No")
         log.info("Secondary applicant = No")
 
+        # Landlord / Rental only
+        if dwelling_use_label == "Landlord / Rental":
+            mailing_checkbox = applicant_page.locator('input[name="boolean_1FAF"]')
+
+            mailing_checkbox.wait_for(state="attached", timeout=10000)
+            mailing_checkbox.scroll_into_view_if_needed()
+            applicant_page.wait_for_timeout(1000)
+
+            if not mailing_checkbox.is_checked():
+                mailing_checkbox.check()
+
+            log.info("Mailing address checkbox checked")
+
         if state == "MD":
-            select_dropdown(applicant_page, 'input[name*="20EE_5_1-inputEl"]', auto_policy_label)
+            auto_policy_dropdown = applicant_page.locator(
+                'input[name*="20EE_5_1-inputEl"]'
+            )
+
+            auto_policy_dropdown.wait_for(state="attached", timeout=10000)
+            auto_policy_dropdown.scroll_into_view_if_needed()
+
+            # Give the page time to finish populating the mailing address fields.
+            applicant_page.wait_for_timeout(1000)
+
+            select_dropdown(
+                applicant_page,
+                'input[name*="20EE_5_1-inputEl"]',
+                auto_policy_label
+            )
+
             log.info(f"Auto policy = {auto_policy_label}")
         else:
             log.info("Auto policy question skipped")
@@ -411,6 +508,15 @@ def process_customer(context, row):
         select_dropdown(applicant_page, 'input[name*="DA_5_1-inputEl"]', "No")
         log.info("Exotic animals = No")
 
+        # Landlord / Rental only
+        if dwelling_use_label == "Landlord / Rental":
+            select_dropdown(
+                applicant_page,
+                'input[name*="203_5_1-inputEl"]',
+                "No"
+            )
+            log.info("Student housing = No")
+
         select_dropdown(applicant_page, 'input[name*="6B_5_1-inputEl"]', "No")
         log.info("Business/Farm/Ranch = No")
 
@@ -431,8 +537,10 @@ def process_customer(context, row):
         applicant_page.get_by_role("option", name="No").first.click()
         log.info("Loss history = No")
 
+
         applicant_page.get_by_role("button", name="Continue and Save").click()
         log.info("Clicked Continue and Save (losses)")
+
 
         # --------------------------------
         # DWELLING PAGE
@@ -472,15 +580,18 @@ def process_customer(context, row):
         else:
             log.info("Electrical/plumbing/heating question skipped")
 
-        if year_roof_updated:
-            select_dropdown(applicant_page, 'input[name*="78_5_1-inputEl"]', "Yes")
-            log.info("Roof updated = Yes")
-            applicant_page.wait_for_timeout(500)
-            applicant_page.get_by_placeholder("YYYY").fill(year_roof_updated)
-            log.info(f"Year roof updated = {year_roof_updated}")
+        if dwelling_use_label != "Landlord / Rental":
+            if year_roof_updated:
+                select_dropdown(applicant_page, 'input[name*="78_5_1-inputEl"]', "Yes")
+                log.info("Roof updated = Yes")
+                applicant_page.wait_for_timeout(500)
+                applicant_page.get_by_placeholder("YYYY").fill(year_roof_updated)
+                log.info(f"Year roof updated = {year_roof_updated}")
+            else:
+                select_dropdown(applicant_page, 'input[name*="78_5_1-inputEl"]', "No")
+                log.info("Roof updated = No")
         else:
-            select_dropdown(applicant_page, 'input[name*="78_5_1-inputEl"]', "No")
-            log.info("Roof updated = No")
+            log.info("Roof updated question skipped (Landlord / Rental)")
 
         capped_assessment = assessment
         if int(assessment) > 1_000_000:
@@ -503,14 +614,19 @@ def process_customer(context, row):
         )
 
         replacement_dropdown.scroll_into_view_if_needed()
-        replacement_dropdown.click()
 
-        applicant_page.wait_for_timeout(1000)
+        click_with_retry(
+            replacement_dropdown,
+            label="replacement cost dropdown"
+        )
 
-        applicant_page.get_by_role(
+        option = applicant_page.get_by_role(
             "option",
             name=replacement_cost
-        ).first.click(timeout=10000)
+        ).first
+
+        option.wait_for(state="visible", timeout=10000)
+        option.click()
 
         log.info(f"Replacement cost = {replacement_cost}")
 
@@ -519,16 +635,57 @@ def process_customer(context, row):
         # --------------------------------
         applicant_page.wait_for_timeout(2000)
 
-        for name, label in (
-            ("boolean_4EF", "Deadbolt"),
-            ("boolean_4F3", "Smoke detector"),
-            ("boolean_4FF", "Carbon monoxide detector"),
-        ):
-            checkbox = applicant_page.locator(f'input[name="{name}"]')
-            checkbox.scroll_into_view_if_needed()
-            applicant_page.wait_for_timeout(500)
-            checkbox.click(force=True)
-            log.info(f"{label} checked")
+        check_checkbox(
+            applicant_page,
+            'input[name="boolean_4EF"]',
+            "Deadbolt"
+        )
+
+        check_checkbox(
+            applicant_page,
+            'input[name="boolean_4F3"]',
+            "Smoke detector"
+        )
+
+        check_checkbox(
+            applicant_page,
+            'input[name="boolean_4FF"]',
+            "Carbon monoxide detector"
+        )
+
+        # Landlord / Rental only
+        if dwelling_use_label == "Landlord / Rental":
+
+            # Number of Foremost-insured properties
+            applicant_page.locator('input[name="int_51D"]').fill("1")
+            log.info("Number of Foremost insured properties = 1")
+
+            # Landlord association
+            select_dropdown(
+                applicant_page,
+                'input[name*="535_5_1-inputEl"]',
+                "No"
+            )
+            log.info("Landlord association = No")
+
+            # Authorization checkboxes
+            check_checkbox(
+                applicant_page,
+                'input[name="boolean_54F"]',
+                "Credit check"
+            )
+
+            check_checkbox(
+                applicant_page,
+                'input[name="boolean_552"]',
+                "Criminal background check"
+            )
+
+            check_checkbox(
+                applicant_page,
+                'input[name="boolean_555"]',
+                "Eviction search"
+            )
 
         applicant_page.get_by_role("button", name="Continue and Save").click()
         log.info("Clicked Continue and Save (dwelling)")
