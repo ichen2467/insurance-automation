@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Logs
+logs/*
+!logs/.gitkeep
+
+# Generated quotes
+quotes/*
+!quotes/.gitkeep
+
+# Customer spreadsheet
+customers.xlsx
