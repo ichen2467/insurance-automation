@@ -390,12 +390,13 @@ def process_customer(context, row):
         # --------------------------------
         # LOCATION PAGE
         # --------------------------------
-        applicant_page.locator('input[name="string_662|spvalidation"]').wait_for(timeout=30000)
+        applicant_page.locator('input[fieldref="LocationInput.Address"]').first.wait_for(timeout=30000)
         log.info("Location page loaded")
 
-        applicant_page.locator('input[name="string_662|spvalidation"]').fill(formatted_address)
+        applicant_page.locator('input[fieldref="LocationInput.Address"]').first.fill(formatted_address)
         applicant_page.get_by_placeholder("YYYY", exact=True).fill(year_built)
-        applicant_page.locator('input[name="int_733"]').fill(square_feet)
+        applicant_page.pause()
+        applicant_page.locator('input[fieldref="RiskDwellingInput.TotalSquareFootage"]').fill(square_feet)
         applicant_page.get_by_placeholder("MM/YYYY").fill(purchase_date)
         log.info("Filled address, year built, square footage, purchase date")
 
@@ -408,17 +409,17 @@ def process_customer(context, row):
         applicant_page.locator('input[name="string_1ED8|spvalidation"]').wait_for(timeout=30000)
         log.info("Applicant page loaded")
 
-        applicant_page.locator('input[name="string_1ED8|spvalidation"]').fill(first_name)
-        applicant_page.locator('input[name="string_1EE5|spvalidation"]').fill(last_name)
+        applicant_page.locator('input[fieldref="AccountInput.Name"]').fill(first_name)
+        applicant_page.locator('input[fieldref="AccountInput.LastName"]').fill(last_name)
         applicant_page.get_by_placeholder("mm/dd/yyyy").fill(dob)
         log.info("Filled name and DOB")
 
-        select_dropdown(applicant_page, 'input[name*="1F5C_5_1-inputEl"]', "No")
+        select_dropdown(applicant_page, 'input[fieldref="AccountInput.IsThereASecondaryApplicant"]', "No")
         log.info("Secondary applicant = No")
 
         # Landlord / Rental only
         if dwelling_use_label == "Landlord / Rental":
-            mailing_checkbox = applicant_page.locator('input[name="boolean_1FAF"]')
+            mailing_checkbox = applicant_page.locator('input[fieldref="AccountMailingAddressInput.SameAsLocation"]')
 
             mailing_checkbox.wait_for(state="attached", timeout=10000)
             mailing_checkbox.scroll_into_view_if_needed()
@@ -431,7 +432,7 @@ def process_customer(context, row):
 
         if state == "MD":
             auto_policy_dropdown = applicant_page.locator(
-                'input[name*="20EE_5_1-inputEl"]'
+                'input[fieldref="DoesApplicantHaveAutoPolicyThroughYourAgency.Question"]'
             )
 
             auto_policy_dropdown.wait_for(state="attached", timeout=10000)
@@ -442,7 +443,7 @@ def process_customer(context, row):
 
             select_dropdown(
                 applicant_page,
-                'input[name*="20EE_5_1-inputEl"]',
+                'input[fieldref="DoesApplicantHaveAutoPolicyThroughYourAgency.Question"]',
                 auto_policy_label
             )
 
@@ -450,22 +451,22 @@ def process_customer(context, row):
         else:
             log.info("Auto policy question skipped")
 
-        select_dropdown(applicant_page, 'input[name*="2124_5_1-inputEl"]', "Yes")
+        select_dropdown(applicant_page, 'input[fieldref="IsThePropertyCurrentlyInsured.Question"]', "Yes")
         log.info("Currently insured = Yes")
         applicant_page.wait_for_timeout(1000)
 
-        select_dropdown(applicant_page, 'input[name*="2140_5_1-inputEl"]', "Other Carrier")
-        applicant_page.locator('input[name*="214A"]').fill("Other")
+        select_dropdown(applicant_page, 'input[fieldref="AccountInput.CurrentInsuranceCarrier"]', "Other Carrier")
+        applicant_page.locator('input[fieldref="AccountInput.CarrierName"]').fill("Other")
         log.info("Carrier = Other Carrier")
 
-        select_dropdown(applicant_page, 'input[name*="2153_5_1-inputEl"]', "No")
+        select_dropdown(applicant_page, 'input[fieldref="HasAnyApplicantBeenCanceledDeclinedOrNonRenewed.Question"]', "No")
         log.info("Cancelled history = No")
 
-        select_dropdown(applicant_page, 'input[name*="216E_5_1-inputEl"]', "No")
+        select_dropdown(applicant_page, 'input[fieldref="DoesApplicantHaveOtherPersonalLinesPolicy.Question"]', "No")
         log.info("Qualifying policy = No")
 
         if state == "MD":
-            select_dropdown(applicant_page, 'input[name*="2177_5_1-inputEl"]', "No")
+            select_dropdown(applicant_page, 'input[fieldref="IsTheApplicantEmployeeOfFarmers.Question"]', "No")
             log.info("Farmers employee = No")
         else:
             log.info("Farmers employee question skipped")
@@ -479,7 +480,7 @@ def process_customer(context, row):
         applicant_page.wait_for_timeout(3000)
         log.info("Eligibility page loaded")
 
-        damage_dropdown = applicant_page.locator('input[name*="64_5_1-inputEl"]')
+        damage_dropdown = applicant_page.locator('input[fieldref="FieldToDescribeDwellingCondition.Question"]')
         damage_dropdown.scroll_into_view_if_needed()
         applicant_page.wait_for_timeout(1000)
         click_with_retry(damage_dropdown, force=True, label="existing damage dropdown")
@@ -487,37 +488,37 @@ def process_customer(context, row):
         applicant_page.get_by_role("option", name="No").first.click()
         log.info("Existing damage = No")
 
-        select_dropdown(applicant_page, 'input[name*="B5_5_1-inputEl"]', "No")
+        select_dropdown(applicant_page, 'input[fieldref="IsDwellingUnderConstruction.Question"]', "No")
         log.info("Construction = No")
 
-        select_dropdown(applicant_page, 'input[name*="36_5_1-inputEl"]', "No")
+        select_dropdown(applicant_page, 'input[fieldref="IsThereAPool.Question"]', "No")
         log.info("Swimming pool = No")
 
-        select_dropdown(applicant_page, 'input[name*="4A_5_1-inputEl"]', "No")
+        select_dropdown(applicant_page, 'input[fieldref="IsThereATrampoline.Question"]', "No")
         log.info("Trampoline = No")
 
-        select_dropdown(applicant_page, 'input[name*="75_5_1-inputEl"]', "No")
+        select_dropdown(applicant_page, 'input[fieldref="IsDwellingCurrentlyVacant.Question"]', "No")
         log.info("Vacant = No")
 
         if state == "VA":
-            select_dropdown(applicant_page, 'input[name*="7F_5_1-inputEl"]', "No")
+            select_dropdown(applicant_page, 'input[fieldref="DoesApplicantHaveAnAnimal.Question"]', "No")
             log.info("Dogs = No")
         else:
             log.info("Dogs question skipped")
 
-        select_dropdown(applicant_page, 'input[name*="DA_5_1-inputEl"]', "No")
+        select_dropdown(applicant_page, 'input[fieldref="DoesApplicantHaveAnExoticAnimal.Question"]', "No")
         log.info("Exotic animals = No")
 
         # Landlord / Rental only
         if dwelling_use_label == "Landlord / Rental":
             select_dropdown(
                 applicant_page,
-                'input[name*="203_5_1-inputEl"]',
+                'input[fieldref="IsDwellingUsedForStudentHousing.Question"]',
                 "No"
             )
             log.info("Student housing = No")
 
-        select_dropdown(applicant_page, 'input[name*="6B_5_1-inputEl"]', "No")
+        select_dropdown(applicant_page, 'input[fieldref="IsThereBusinessConductedOnPremises.Question"]', "No")
         log.info("Business/Farm/Ranch = No")
 
         applicant_page.get_by_role("button", name="Continue and Save").click()
@@ -573,37 +574,37 @@ def process_customer(context, row):
         residential_dropdown.press("Enter")
         log.info("Residential dwellings = 1")
 
-        select_dropdown(applicant_page, 'input[name*="4C_5_1-inputEl"]',
+        select_dropdown(applicant_page, 'input[fieldref="RiskDwellingInput.PrimaryHeatSource"]',
                          "Furnace (forced air, radiant and central air)")
         log.info("Primary heat source = Furnace")
 
-        select_dropdown(applicant_page, 'input[name*="61_5_1-inputEl"]', "Natural Gas")
+        select_dropdown(applicant_page, 'input[fieldref="RiskDwellingInput.TypeOfFuelPrimary"]', "Natural Gas")
         log.info("Fuel type = Natural Gas")
 
-        select_dropdown(applicant_page, 'input[name*="74_5_1-inputEl"]', "No")
+        select_dropdown(applicant_page, 'input[fieldref="RiskDwellingInput.IsThereSecondaryHeatSource"]', "No")
         log.info("Secondary heat source = No")
 
-        select_dropdown(applicant_page, 'input[name*="A9_5_1-inputEl"]', "No")
+        select_dropdown(applicant_page, 'input[fieldref="IsThereHeatingDeviceInGarageOrOtherStructure.Question"]', "No")
         log.info("Garage heating device = No")
 
-        select_dropdown(applicant_page, 'input[name*="24_5_1-inputEl"]', "No")
-        log.info("Townhouse = No")
+        select_dropdown(applicant_page, 'input[fieldref="IsRowHouseOrTownHouse.Question"]', "No")
+        log.info("Townhouse = No") 
 
         if state == "VA":
-            select_dropdown(applicant_page, 'input[name*="3E_5_1-inputEl"]', "No")
+            select_dropdown(applicant_page, 'input[fieldref="RiskDwellingInput.HasDwellingsElectricalPlumbingOrHeatingBeenUpgraded"]', "No")
             log.info("Electrical/plumbing/heating updated = No")
         else:
             log.info("Electrical/plumbing/heating question skipped")
 
         if dwelling_use_label != "Landlord / Rental":
             if year_roof_updated:
-                select_dropdown(applicant_page, 'input[name*="78_5_1-inputEl"]', "Yes")
+                select_dropdown(applicant_page, 'input[fieldref="RiskDwellingInput.HasRoofOfDwellingBeenUpdated"]', "Yes")
                 log.info("Roof updated = Yes")
                 applicant_page.wait_for_timeout(500)
                 applicant_page.get_by_placeholder("YYYY").fill(year_roof_updated)
                 log.info(f"Year roof updated = {year_roof_updated}")
             else:
-                select_dropdown(applicant_page, 'input[name*="78_5_1-inputEl"]', "No")
+                select_dropdown(applicant_page, 'input[fieldref="RiskDwellingInput.HasRoofOfDwellingBeenUpdated"]', "No")
                 log.info("Roof updated = No")
         else:
             log.info("Roof updated question skipped (Landlord / Rental)")
@@ -616,16 +617,16 @@ def process_customer(context, row):
                 f"— capped to {capped_assessment}"
             )
 
-        applicant_page.locator('input[name="int_490"]').fill(capped_assessment)
+        applicant_page.locator('input[fieldref="RiskInput.AmountOfInsurance""]').fill(capped_assessment)
         log.info(f"Amount of insurance = {capped_assessment}")
 
-        applicant_page.locator('input[name="int_4AE"]').fill(capped_assessment)
+        applicant_page.locator('input[fieldref="RiskDwellingInput.CurrentMarketValueMinusLandValue"]').fill(capped_assessment)
         log.info(f"Market value = {capped_assessment}")
 
         replacement_cost = "Yes" if int(capped_assessment) > 750_000 else "No"
 
         replacement_dropdown = applicant_page.locator(
-            'input[name*="BC_5_1-inputEl"]'
+            'input[fieldref="RiskDwellingInput.DoesApplicantWantReplacementCost"]'
         )
 
         replacement_dropdown.scroll_into_view_if_needed()
@@ -652,19 +653,19 @@ def process_customer(context, row):
 
         check_checkbox(
             applicant_page,
-            'input[name="boolean_4EF"]',
+            'input[fieldref="RiskInput.Deadbolt"]',
             "Deadbolt"
         )
 
         check_checkbox(
             applicant_page,
-            'input[name="boolean_4F3"]',
+            'input[fieldref="RiskInput.SmokeDetector"]',
             "Smoke detector"
         )
 
         check_checkbox(
             applicant_page,
-            'input[name="boolean_4FF"]',
+            'input[fieldref="RiskInput.CarbonMonoxideDetector"]',
             "Carbon monoxide detector"
         )
 
@@ -672,33 +673,44 @@ def process_customer(context, row):
         if dwelling_use_label == "Landlord / Rental":
 
             # Number of Foremost-insured properties
-            applicant_page.locator('input[name="int_51D"]').fill("1")
+            applicant_page.locator('input[fieldref="RiskDwellingInput.NumberOfRentalAndVacantSiteBuiltProperties"]').fill("1")
             log.info("Number of Foremost insured properties = 1")
 
+            # Managed by management company
+            try:
+                select_dropdown(
+                    applicant_page,
+                    'input[fieldref="RiskDwellingInput.IsPropertyManagedByManagementCompany"]',
+                    "No"
+                )
+                print("Management company = No")
+            except Exception:
+                print("Management company question not present, skipping")
+            
             # Landlord association
             select_dropdown(
                 applicant_page,
-                'input[name*="535_5_1-inputEl"]',
+                'input[fieldref="RiskDwellingInput.DoesTheApplicantBelongToLandlordAssc"]',
                 "No"
-            )
+            )   
             log.info("Landlord association = No")
 
             # Authorization checkboxes
             check_checkbox(
                 applicant_page,
-                'input[name="boolean_54F"]',
+                'input[fieldref="RiskDwellingInput.CreditCheck"]',
                 "Credit check"
             )
 
             check_checkbox(
                 applicant_page,
-                'input[name="boolean_552"]',
+                'input[fieldref="RiskDwellingInput.CriminalBackgroundCheck"]',
                 "Criminal background check"
             )
 
             check_checkbox(
                 applicant_page,
-                'input[name="boolean_555"]',
+                'input[fieldref="RiskDwellingInput.EvictionSearch"]',
                 "Eviction search"
             )
 
@@ -773,7 +785,7 @@ def process_customer(context, row):
         # Additional Information. If the phone field for Additional
         # Information isn't showing up yet, assume we're on the
         # Underwriting page and click through it.
-        phone_locator = applicant_page.locator('input[name="string_A3F|phoneUS"]')
+        phone_locator = applicant_page.locator('input[fieldref="AccountInput.PrimaryPhone"]')
         try:
             phone_locator.wait_for(timeout=5000)
         except Exception:
@@ -794,13 +806,13 @@ def process_customer(context, row):
         phone_locator.fill(phone)
         log.info(f"Phone = {phone}")
 
-        applicant_page.locator('input[name="string_A46|"]').fill(email)
+        applicant_page.locator('input[fieldref="AccountInput.Email"]').fill(email)
         log.info(f"Email = {email}")
 
-        select_dropdown(applicant_page, 'input[name*="A4D_5_1-inputEl"]', "No")
+        select_dropdown(applicant_page, 'input[fieldref="AccountMailingAddressInput.DoesApplicantHaveTempOrSeasonalAddress"]', "No")
         log.info("Seasonal mailing address = No")
 
-        select_dropdown(applicant_page, 'input[name*="B08_5_1-inputEl"]', "No")
+        select_dropdown(applicant_page, 'input[fieldref="RiskInput.IsThereAnAdditionalInterest"]', "No")
         log.info("Additional interest = No")
 
         applicant_page.get_by_role("button", name="Continue and Save").click()
