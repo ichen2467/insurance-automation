@@ -395,7 +395,6 @@ def process_customer(context, row):
 
         applicant_page.locator('input[fieldref="LocationInput.Address"]').first.fill(formatted_address)
         applicant_page.get_by_placeholder("YYYY", exact=True).fill(year_built)
-        applicant_page.pause()
         applicant_page.locator('input[fieldref="RiskDwellingInput.TotalSquareFootage"]').fill(square_feet)
         applicant_page.get_by_placeholder("MM/YYYY").fill(purchase_date)
         log.info("Filled address, year built, square footage, purchase date")
@@ -406,7 +405,7 @@ def process_customer(context, row):
         # --------------------------------
         # APPLICANT PAGE
         # --------------------------------
-        applicant_page.locator('input[name="string_1ED8|spvalidation"]').wait_for(timeout=30000)
+        applicant_page.locator('input[fieldref="AccountInput.Name"]').wait_for(timeout=30000)
         log.info("Applicant page loaded")
 
         applicant_page.locator('input[fieldref="AccountInput.Name"]').fill(first_name)
