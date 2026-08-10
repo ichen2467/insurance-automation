@@ -9,7 +9,6 @@ venv/
 env/
 .env
 
-
 # Logs
 logs/*
 !logs/.gitkeep
