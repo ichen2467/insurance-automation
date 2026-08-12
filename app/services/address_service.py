@@ -1,83 +1,58 @@
-import requests
+import re
 
 from app.schemas.address import Address
 
 
-NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-
-HEADERS = {
-    "User-Agent": "insurance-automation/1.0"
+SUPPORTED_STATES = {
+    "MD": "MD",
+    "MARYLAND": "MD",
+    "VA": "VA",
+    "VIRGINIA": "VA",
 }
 
 
 def normalize_address(raw_address: str) -> Address:
-    """Convert a user-provided address into a standardized Address object."""
+    """Validate and normalize a user-provided MD or VA address."""
 
     if not raw_address or not raw_address.strip():
         raise ValueError("Address cannot be empty.")
 
-    params = {
-        "q": raw_address,
-        "format": "jsonv2",
-        "addressdetails": 1,
-        "limit": 1,
-        "countrycodes": "us",
-    }
+    parts = [part.strip() for part in raw_address.split(",")]
 
-    response = requests.get(
-        NOMINATIM_URL,
-        params=params,
-        headers=HEADERS,
-        timeout=10,
+    if len(parts) < 3:
+        raise ValueError(
+            "Address must include street, city, and state/ZIP."
+        )
+
+    street = parts[0]
+    city = parts[1]
+
+    state_zip = " ".join(parts[2].split())
+
+    match = re.fullmatch(
+        r"([A-Za-z]+)(?:\s+(\d{5}(?:-\d{4})?))?",
+        state_zip,
     )
 
-    response.raise_for_status()
+    if not match:
+        raise ValueError("Invalid state or ZIP code format.")
 
-    results = response.json()
+    state_input = match.group(1).upper()
+    zip_code = match.group(2)
 
-    if not results:
-        raise ValueError(f"Could not find address: {raw_address}")
-
-    result = results[0]
-    address_data = result.get("address", {})
-
-    street_number = address_data.get("house_number", "")
-    street_name = address_data.get("road", "")
-
-    street = " ".join(
-        part for part in [street_number, street_name]
-        if part
-    )
-
-    city = (
-        address_data.get("city")
-        or address_data.get("town")
-        or address_data.get("village")
-        or ""
-    )
-
-    state = address_data.get("state", "")
-    zip_code = address_data.get("postcode", "")
-    county = address_data.get("county", "")
-
-    if not street:
-        raise ValueError("Nominatim did not return a street address.")
-
-    if not city:
-        raise ValueError("Nominatim did not return a city.")
+    state = SUPPORTED_STATES.get(state_input)
 
     if not state:
-        raise ValueError("Nominatim did not return a state.")
+        raise ValueError(
+            "Only Maryland (MD) and Virginia (VA) are supported."
+        )
 
     if not zip_code:
-        raise ValueError("Nominatim did not return a ZIP code.")
+        raise ValueError("ZIP code is required.")
 
     return Address(
         street=street,
         city=city,
         state=state,
         zip_code=zip_code,
-        county=county,
-        latitude=float(result["lat"]),
-        longitude=float(result["lon"]),
     )
