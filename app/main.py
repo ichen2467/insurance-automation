@@ -8,6 +8,7 @@ from datetime import datetime
 
 import pandas as pd
 from playwright.sync_api import sync_playwright
+from playwright.sync_api import Error as PlaywrightError
 
 # --------------------------------
 # LOGGING SETUP
@@ -523,7 +524,6 @@ def process_customer(context, row):
         applicant_page.get_by_role("button", name="Continue and Save").click()
         log.info("Clicked Continue and Save (eligibility)")
 
-        from playwright.sync_api import Error as PlaywrightError
 
         # --------------------------------
         # LOSSES PAGE
